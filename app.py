@@ -88,10 +88,6 @@ if codigo:
                 # Obtener las filas que coinciden con el código y el lote seleccionado
                 selected_row = search_results.iloc[0]  # Siempre tomar el primer resultado
 
-                # Convertir la columna 'fechavencelote' a formato datetime si es necesario
-                if 'fechavencelote' in selected_row:
-                    selected_row['fechavencelote'] = pd.to_datetime(selected_row['fechavencelote'], errors='coerce').dt.strftime('%d-%m-%Y')
-
                 # Crear un dataframe con la información ingresada y los datos del inventario
                 consulta_data = {
                     'codart': [codigo],
