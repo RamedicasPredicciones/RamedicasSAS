@@ -66,63 +66,66 @@ if codigo:
     search_results = inventario_df[inventario_df['codart'].str.contains(codigo, case=False, na=False)]
 
     if not search_results.empty:
-        # Mostrar los lotes disponibles para el código de artículo ingresado
-        lotes = search_results['numlote'].unique().tolist()
-        lotes.append('Otro')  # Agregar la opción de "Otro" para escribir un nuevo lote
-        lote_seleccionado = st.selectbox('Seleccione un lote', lotes)
-
-        # Si el lote seleccionado es "Otro", permitir escribir uno nuevo
-        if lote_seleccionado == 'Otro':
-            nuevo_lote = st.text_input('Ingrese el nuevo número de lote:')
+        # Verificar si la columna 'presentacion' existe en los resultados
+        if 'presentacion' not in search_results.columns:
+            st.error("La columna 'presentacion' no está presente en el inventario.")
         else:
-            nuevo_lote = lote_seleccionado
+            # Mostrar los lotes disponibles para el código de artículo ingresado
+            lotes = search_results['numlote'].unique().tolist()
+            lotes.append('Otro')  # Agregar la opción de "Otro" para escribir un nuevo lote
+            lote_seleccionado = st.selectbox('Seleccione un lote', lotes)
 
-        # Campo para ingresar la cantidad
-        cantidad = st.number_input('Ingrese la cantidad', min_value=1)
-
-        # Verificar si se presiona el botón para guardar
-        if st.button('Guardar consulta'):
-            if not nuevo_lote:  # Verificar si el nuevo lote está vacío
-                st.error("Debe ingresar un número de lote válido.")
+            # Si el lote seleccionado es "Otro", permitir escribir uno nuevo
+            if lote_seleccionado == 'Otro':
+                nuevo_lote = st.text_input('Ingrese el nuevo número de lote:')
             else:
-                # Si se seleccionó "Otro", usamos el lote ingresado por el usuario
-                if lote_seleccionado == 'Otro':
-                    # Crear una nueva fila con los datos ingresados por el usuario
-                    nuevo_dato = {
-                        'codart': codigo, 
-                        'numlote': nuevo_lote, 
-                        'cantidad': cantidad, 
-                        'cod_barras': "",  # Puede agregar más información si es necesario
-                        'nomart': search_results['nomart'].iloc[0], 
-                        'presentacion': search_results['presentacion'].iloc[0], 
-                        'fechavencelote': search_results['fechavencelote'].iloc[0]
-                    }
-                    selected_data = pd.DataFrame([nuevo_dato])
-                else:
-                    # Filtrar la fila correspondiente en el inventario según el lote seleccionado
-                    selected_data = search_results[search_results['numlote'] == nuevo_lote]
-                    selected_data['cantidad'] = cantidad  # Asignar la cantidad ingresada por el usuario
-                
-                # Asegurarse de que las columnas necesarias estén presentes
-                required_columns = ['codart', 'numlote', 'cantidad', 'cod_barras', 'nomart', 'presentacion', 'fechavencelote']
-                missing_columns = [col for col in required_columns if col not in selected_data.columns]
-                if missing_columns:
-                    st.error(f"Faltan las siguientes columnas: {', '.join(missing_columns)}")
-                else:
-                    # Si las columnas están presentes, procesar los datos
-                    selected_data = selected_data[required_columns].copy()
+                nuevo_lote = lote_seleccionado
 
-                    # Crear archivo Excel en memoria
-                    consultas_excel = convertir_a_excel(selected_data)
+            # Campo para ingresar la cantidad
+            cantidad = st.number_input('Ingrese la cantidad', min_value=1)
 
-                    # Proveer opción de descarga
-                    st.success("Consulta guardada con éxito!")
-                    st.download_button(
-                        label="Descargar Excel con la consulta guardada",
-                        data=consultas_excel,
-                        file_name='consulta_guardada.xlsx',
-                        mime="application/vnd.ms-excel"
-                    )
+            # Verificar si se presiona el botón para guardar
+            if st.button('Guardar consulta'):
+                if not nuevo_lote:  # Verificar si el nuevo lote está vacío
+                    st.error("Debe ingresar un número de lote válido.")
+                else:
+                    # Si se seleccionó "Otro", usamos el lote ingresado por el usuario
+                    if lote_seleccionado == 'Otro':
+                        # Crear una nueva fila con los datos ingresados por el usuario
+                        nuevo_dato = {
+                            'codart': codigo, 
+                            'numlote': nuevo_lote, 
+                            'cantidad': cantidad, 
+                            'cod_barras': "",  # Puede agregar más información si es necesario
+                            'nomart': search_results['nomart'].iloc[0], 
+                            'presentacion': search_results['presentacion'].iloc[0], 
+                            'fechavencelote': search_results['fechavencelote'].iloc[0]
+                        }
+                        selected_data = pd.DataFrame([nuevo_dato])
+                    else:
+                        # Filtrar la fila correspondiente en el inventario según el lote seleccionado
+                        selected_data = search_results[search_results['numlote'] == nuevo_lote]
+                        selected_data['cantidad'] = cantidad  # Asignar la cantidad ingresada por el usuario
+                    
+                    # Asegurarse de que las columnas necesarias estén presentes
+                    required_columns = ['codart', 'numlote', 'cantidad', 'cod_barras', 'nomart', 'presentacion', 'fechavencelote']
+                    missing_columns = [col for col in required_columns if col not in selected_data.columns]
+                    if missing_columns:
+                        st.error(f"Faltan las siguientes columnas: {', '.join(missing_columns)}")
+                    else:
+                        # Si las columnas están presentes, procesar los datos
+                        selected_data = selected_data[required_columns].copy()
+
+                        # Crear archivo Excel en memoria
+                        consultas_excel = convertir_a_excel(selected_data)
+
+                        # Proveer opción de descarga
+                        st.success("Consulta guardada con éxito!")
+                        st.download_button(
+                            label="Descargar Excel con la consulta guardada",
+                            data=consultas_excel,
+                            file_name='consulta_guardada.xlsx',
+                            mime="application/vnd.ms-excel"
+                        )
     else:
         st.error("Código de artículo no encontrado en el inventario.")
-
