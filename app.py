@@ -85,28 +85,32 @@ if codigo:
             if not nuevo_lote:  # Verificar si el nuevo lote está vacío
                 st.error("Debe ingresar un número de lote válido.")
             else:
-                selected_data = search_results[search_results['numlote'] == nuevo_lote]
-                
-                # Asegurarse de que las columnas necesarias estén presentes
-                required_columns = ['codart', 'numlote', 'cod_barras', 'nomart', 'presentacionart', 'fechavencelote']
-                missing_columns = [col for col in required_columns if col not in selected_data.columns]
-                if missing_columns:
-                    st.error(f"Faltan las siguientes columnas: {', '.join(missing_columns)}")
-                else:
-                    # Si las columnas están presentes, procesar los datos
-                    selected_data = selected_data[required_columns].copy()
-                    selected_data['cantidad'] = cantidad  # Asignar la cantidad ingresada
+                # Obtener las filas que coinciden con el código y el lote seleccionado
+                selected_row = search_results[search_results['numlote'] == nuevo_lote].iloc[0]
 
-                    # Crear archivo Excel en memoria
-                    consultas_excel = convertir_a_excel(selected_data)
+                # Crear un dataframe con la información ingresada y los datos del inventario
+                consulta_data = {
+                    'codart': [codigo],
+                    'numlote': [nuevo_lote],
+                    'cantidad': [cantidad],
+                    'cod_barras': [selected_row['cod_barras'] if 'cod_barras' in selected_row else None],
+                    'nomart': [selected_row['nomart'] if 'nomart' in selected_row else None],
+                    'presentacionart': [selected_row['presentacionart'] if 'presentacionart' in selected_row else None],
+                    'fechavencelote': [selected_row['fechavencelote'] if 'fechavencelote' in selected_row else None]
+                }
 
-                    # Proveer opción de descarga
-                    st.success("Consulta guardada con éxito!")
-                    st.download_button(
-                        label="Descargar Excel con la consulta guardada",
-                        data=consultas_excel,
-                        file_name='consulta_guardada.xlsx',
-                        mime="application/vnd.ms-excel"
-                    )
+                consulta_df = pd.DataFrame(consulta_data)
+
+                # Crear archivo Excel en memoria
+                consultas_excel = convertir_a_excel(consulta_df)
+
+                # Proveer opción de descarga
+                st.success("Consulta guardada con éxito!")
+                st.download_button(
+                    label="Descargar Excel con la consulta guardada",
+                    data=consultas_excel,
+                    file_name='consulta_guardada.xlsx',
+                    mime="application/vnd.ms-excel"
+                )
     else:
         st.error("Código de artículo no encontrado en el inventario.")
