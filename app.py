@@ -1,116 +1,118 @@
-import requests
 import pandas as pd
 import streamlit as st
 import io
+import requests
+import cv2
+from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
 
-# Función para cargar y unir los datos del inventario y el maestro de moléculas
+# Función para cargar los datos desde Google Sheets
 @st.cache_data
-def cargar_inventario_y_completar():
-    url_inventario = "https://apkit.ramedicas.com/api/items/ws-batchsunits?token=3f8857af327d7f1adb005b81a12743bc17fef5c48f228103198100d4b032f556"
-    url_maestro_moleculas = "https://docs.google.com/spreadsheets/d/19myWtMrvsor2P_XHiifPgn8YKdTWE39O/export?format=xlsx"
-    
+def cargar_base():
+    url = "https://docs.google.com/spreadsheets/d/1Gk-EUifL3fODSc5kJ52gsNsxY9-hC1j4/export?format=xlsx"
     try:
-        # Obtener los datos del inventario
-        response = requests.get(url_inventario, verify=False)
-        if response.status_code == 200:
-            data_inventario = response.json()
-            inventario_df = pd.DataFrame(data_inventario)
-            inventario_df.columns = inventario_df.columns.str.lower().str.strip()
-
-            # Renombrar la columna 'codArt' a 'codart' si es necesario
-            if 'codart' not in inventario_df.columns and 'codart' in inventario_df.columns.str.lower():
-                inventario_df.rename(columns={'codArt': 'codart'}, inplace=True)
-
-            # Obtener el archivo maestro de moléculas
-            response_maestro = requests.get(url_maestro_moleculas, verify=False)
-            if response_maestro.status_code == 200:
-                maestro_moleculas = pd.read_excel(response_maestro.content)
-                maestro_moleculas.columns = maestro_moleculas.columns.str.lower().str.strip()
-
-                # Unir la base de inventario con el maestro para incluir 'cod_barras'
-                inventario_df = inventario_df.merge(
-                    maestro_moleculas[['codart', 'cod_barras']], 
-                    on='codart', 
-                    how='left'
-                )
-                return inventario_df
-            else:
-                print(f"Error al obtener el archivo maestro de moléculas: {response_maestro.status_code}")
-                return None
-        else:
-            print(f"Error al obtener datos de la API: {response.status_code}")
-            return None
-    except requests.exceptions.RequestException as e:
-        print(f"Error en la conexión con la API: {e}")
+        response = requests.get(url)
+        response.raise_for_status()
+        base = pd.read_excel(io.BytesIO(response.content), sheet_name="TP's GHG")
+        base.columns = base.columns.str.lower().str.strip()
+        return base
+    except Exception as e:
+        st.error(f"Error al cargar la base de datos: {e}")
         return None
 
-# Función para guardar los datos seleccionados en un archivo Excel en memoria
+# Clase para procesar video y detectar códigos de barras
+class BarcodeReader(VideoTransformerBase):
+    def transform(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        detector = cv2.QRCodeDetector()
+        data, _, _ = detector.detectAndDecode(img)
+        if data:  # Si se detecta un código de barras
+            st.session_state['barcode'] = data
+            cv2.putText(img, f"Codigo: {data}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        return img
+
+# Función para guardar los datos en un archivo Excel
 def convertir_a_excel(df):
-    output = io.BytesIO()  # Crea un archivo en memoria
+    output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Consultas")
-    output.seek(0)  # Mueve el puntero al inicio del archivo
-    return output.getvalue()
+        df.to_excel(writer, index=False, sheet_name="Consulta")
+    output.seek(0)
+    return output
 
-# Configuración de la página en Streamlit
-st.title("Consulta de Artículos y Lotes")
+# Configuración de la app
+st.title("Consulta Automática de Artículos")
 
-# Cargar el inventario y los datos completos
-inventario_df = cargar_inventario_y_completar()
+base_df = cargar_base()
 
-# Formulario de búsqueda del código de artículo
-codigo = st.text_input('Ingrese el código del artículo:')
+if "consultas" not in st.session_state:
+    st.session_state.consultas = []
 
-if codigo:
-    # Filtrar el inventario por código de artículo
-    search_results = inventario_df[inventario_df['codart'].str.contains(codigo, case=False, na=False)]
+# Activar la cámara para escanear el código de barras
+st.subheader("Escanea el código de barras")
+webrtc_streamer(
+    key="barcode-reader",
+    video_transformer_factory=BarcodeReader,
+    media_stream_constraints={"video": True, "audio": False}
+)
 
-    if not search_results.empty:
-        # Mostrar los lotes disponibles para el código de artículo ingresado
-        lotes = search_results['numlote'].unique().tolist()
-        lotes.append('Otro')  # Agregar la opción de "Otro" para escribir un nuevo lote
-        lote_seleccionado = st.selectbox('Seleccione un lote', lotes)
+# Detectar y procesar automáticamente el código
+if 'barcode' in st.session_state and st.session_state['barcode']:
+    codigo = st.session_state['barcode']
 
-        # Si el lote seleccionado es "Otro", permitir escribir uno nuevo
-        if lote_seleccionado == 'Otro':
-            nuevo_lote = st.text_input('Ingrese el nuevo número de lote:')
-        else:
-            nuevo_lote = lote_seleccionado
+    # Buscar automáticamente en la base de datos
+    if base_df is not None:
+        search_results = base_df[base_df['codarticulo'].str.contains(codigo, case=False, na=False)]
+        if not search_results.empty:
+            st.success("Código detectado. Detalles del artículo:")
+            st.write(search_results.head(1))  # Mostrar el primer resultado
 
-        # Campo para ingresar la cantidad (esto es lo que el usuario ingresa)
-        cantidad = st.number_input('Ingrese la cantidad', min_value=1)
+            # Seleccionar lote
+            lotes = search_results['lote'].dropna().unique().tolist()
+            lotes.append('Otro')
+            lote_seleccionado = st.selectbox('Seleccione un lote', lotes)
 
-        # Guardar la selección y datos en el archivo Excel
-        if st.button('Guardar consulta'):
-            if not nuevo_lote:  # Verificar si el nuevo lote está vacío
-                st.error("Debe ingresar un número de lote válido.")
+            # Campo para un nuevo lote si es necesario
+            if lote_seleccionado == 'Otro':
+                nuevo_lote = st.text_input('Ingrese el nuevo número de lote:')
             else:
-                # Obtener las filas que coinciden con el código y el lote seleccionado
-                selected_row = search_results.iloc[0]  # Siempre tomar el primer resultado
+                nuevo_lote = lote_seleccionado
 
-                # Crear un dataframe con la información ingresada y los datos del inventario
-                consulta_data = {
-                    'codart': [codigo],
-                    'numlote': [nuevo_lote],  # Usar el lote ingresado por el usuario
-                    'cantidad': [cantidad],
-                    'cod_barras': [selected_row['cod_barras'] if 'cod_barras' in selected_row else None],
-                    'nomart': [selected_row['nomart'] if 'nomart' in selected_row else None],
-                    'presentacion': [selected_row['presentacion'] if 'presentacion' in selected_row else None],
-                    'fechavencelote': [selected_row['fechavencelote'] if 'fechavencelote' in selected_row else None]
-                }
+            # Campo opcional para la cantidad
+            cantidad = st.text_input('Ingrese la cantidad (opcional):')
 
-                consulta_df = pd.DataFrame(consulta_data)
-
-                # Crear archivo Excel en memoria
-                consultas_excel = convertir_a_excel(consulta_df)
-
-                # Proveer opción de descarga
-                st.success("Consulta guardada con éxito!")
-                st.download_button(
-                    label="Descargar Excel con la consulta guardada",
-                    data=consultas_excel,
-                    file_name='consulta_guardada.xlsx',
-                    mime="application/vnd.ms-excel"
-                )
+            # Botón para guardar
+            if st.button("Guardar entrada"):
+                if not nuevo_lote:
+                    st.error("Debe ingresar un número de lote válido.")
+                else:
+                    consulta_data = {
+                        'codarticulo': codigo,
+                        'articulo': search_results.iloc[0]['articulo'] if 'articulo' in search_results.columns else None,
+                        'lote': nuevo_lote,
+                        'codbarras': search_results.iloc[0]['codbarras'] if 'codbarras' in search_results.columns else None,
+                        'presentacion': search_results.iloc[0]['presentacion'] if 'presentacion' in search_results.columns else None,
+                        'vencimiento': search_results.iloc[0]['vencimiento'] if 'vencimiento' in search_results.columns else None,
+                        'cantidad': cantidad if cantidad else None
+                    }
+                    st.session_state.consultas.append(consulta_data)
+                    st.success("Entrada guardada correctamente.")
+        else:
+            st.error("Código no encontrado en la base.")
     else:
-        st.error("Código de artículo no encontrado en el inventario.")
+        st.error("Error al cargar la base de datos.")
+
+# Mostrar las entradas guardadas
+if st.session_state.consultas:
+    st.write("Entradas guardadas:")
+    consultas_df = pd.DataFrame(st.session_state.consultas)
+    st.dataframe(consultas_df)
+
+    # Botón para descargar las consultas
+    consultas_excel = convertir_a_excel(consultas_df)
+    st.download_button(
+        label="Descargar Excel",
+        data=consultas_excel,
+        file_name="consultas_guardadas.xlsx",
+        mime="application/vnd.ms-excel"
+    )
+else:
+    st.warning("No hay entradas guardadas.")
