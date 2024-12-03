@@ -86,7 +86,7 @@ if codigo:
                 st.error("Debe ingresar un número de lote válido.")
             else:
                 # Obtener las filas que coinciden con el código y el lote seleccionado
-                selected_row = search_results.iloc[0]  # Siempre tomar el primer resultado
+                selected_row = search_results[search_results['numlote'] == nuevo_lote].iloc[0] if nuevo_lote != 'Otro' else search_results.iloc[0]
 
                 # Crear un dataframe con la información ingresada y los datos del inventario
                 consulta_data = {
@@ -96,7 +96,9 @@ if codigo:
                     'cod_barras': [selected_row['cod_barras'] if 'cod_barras' in selected_row else None],
                     'nomart': [selected_row['nomart'] if 'nomart' in selected_row else None],
                     'presentacion': [selected_row['presentacion'] if 'presentacion' in selected_row else None],
-                    'fechavencelote': [selected_row['fechavencelote'] if 'fechavencelote' in selected_row else None]
+                    # Verificar el formato de 'fechavencelote' y convertirlo si es necesario
+                    'fechavencelote': [pd.to_datetime(selected_row['fechavencelote'], errors='coerce').strftime('%d/%m/%Y') 
+                                       if 'fechavencelote' in selected_row else None]
                 }
 
                 consulta_df = pd.DataFrame(consulta_data)
@@ -114,4 +116,3 @@ if codigo:
                 )
     else:
         st.error("Código de artículo no encontrado en el inventario.")
-
