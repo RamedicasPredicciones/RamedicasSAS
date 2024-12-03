@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 import streamlit as st
+import io
 
 # Función para cargar y unir los datos del inventario y el maestro de moléculas
 @st.cache_data
@@ -43,14 +44,13 @@ def cargar_inventario_y_completar():
         print(f"Error en la conexión con la API: {e}")
         return None
 
-# Función para guardar los datos seleccionados en un archivo Excel
-def save_to_excel(data, file_name='consultas.xlsx'):
-    try:
-        existing_data = pd.read_excel(file_name)
-        combined_data = pd.concat([existing_data, data], ignore_index=True)
-        combined_data.to_excel(file_name, index=False)
-    except FileNotFoundError:
-        data.to_excel(file_name, index=False)
+# Función para guardar los datos seleccionados en un archivo Excel en memoria
+def convertir_a_excel(df):
+    output = io.BytesIO()  # Crea un archivo en memoria
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Consultas")
+    output.seek(0)  # Mueve el puntero al inicio del archivo
+    return output.getvalue()
 
 # Configuración de la página en Streamlit
 st.title("Consulta de Artículos y Lotes")
@@ -85,16 +85,18 @@ if codigo:
             selected_data = selected_data[['codart', 'numlote', 'cantidad', 'cod_barras', 'nomart', 'presentacion', 'fechavencelote']].copy()
             selected_data['cantidad'] = cantidad
 
-            save_to_excel(selected_data)
-            st.success("Consulta guardada con éxito!")
+            # Crear archivo Excel en memoria
+            consultas_excel = convertir_a_excel(selected_data)
 
+            # Proveer opción de descarga
+            st.success("Consulta guardada con éxito!")
+            st.download_button(
+                label="Descargar Excel con la consulta guardada",
+                data=consultas_excel,
+                file_name='consulta_guardada.xlsx',
+                mime="application/vnd.ms-excel"
+            )
     else:
         st.error("Código de artículo no encontrado en el inventario.")
 
-# Opción para descargar el archivo con todas las consultas realizadas
-st.download_button(
-    label="Descargar Excel con todas las consultas",
-    data=open('consultas.xlsx', 'rb').read(),
-    file_name='consultas.xlsx',
-    mime="application/vnd.ms-excel"
-)
+
