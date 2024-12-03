@@ -68,6 +68,7 @@ if codigo:
     if not search_results.empty:
         # Mostrar los lotes disponibles para el código de artículo ingresado
         lotes = search_results['numlote'].unique().tolist()
+        lotes = [str(lote).strip() for lote in lotes]  # Limpiar los valores para evitar problemas de formato
         lotes.append('Otro')  # Agregar la opción de "Otro" para escribir un nuevo lote
         lote_seleccionado = st.selectbox('Seleccione un lote', lotes)
 
@@ -85,9 +86,14 @@ if codigo:
             if not nuevo_lote:  # Verificar si el nuevo lote está vacío
                 st.error("Debe ingresar un número de lote válido.")
             else:
+                # Depurar: Mostrar los resultados encontrados
+                st.write(f"Resultados de la búsqueda para el código '{codigo}':")
+                st.write(search_results[['codart', 'numlote', 'nomart']])
+
                 # Comprobar si el lote seleccionado existe en el dataframe
-                if nuevo_lote != 'Otro' and nuevo_lote in search_results['numlote'].values:
-                    selected_row = search_results[search_results['numlote'] == nuevo_lote].iloc[0]
+                lote_normalizado = nuevo_lote.strip()  # Eliminar espacios al principio y al final
+                if nuevo_lote != 'Otro' and lote_normalizado in search_results['numlote'].str.strip().values:
+                    selected_row = search_results[search_results['numlote'].str.strip() == lote_normalizado].iloc[0]
                 elif nuevo_lote == 'Otro' and not search_results.empty:
                     selected_row = search_results.iloc[0]
                 else:
