@@ -85,34 +85,42 @@ if codigo:
             if not nuevo_lote:  # Verificar si el nuevo lote está vacío
                 st.error("Debe ingresar un número de lote válido.")
             else:
-                # Obtener las filas que coinciden con el código y el lote seleccionado
-                selected_row = search_results[search_results['numlote'] == nuevo_lote].iloc[0] if nuevo_lote != 'Otro' else search_results.iloc[0]
+                # Comprobar si el lote seleccionado existe en el dataframe
+                if nuevo_lote != 'Otro' and nuevo_lote in search_results['numlote'].values:
+                    selected_row = search_results[search_results['numlote'] == nuevo_lote].iloc[0]
+                elif nuevo_lote == 'Otro' and not search_results.empty:
+                    selected_row = search_results.iloc[0]
+                else:
+                    st.error(f"No se encontró un lote válido para el código '{codigo}'.")
+                    selected_row = None
 
-                # Crear un dataframe con la información ingresada y los datos del inventario
-                consulta_data = {
-                    'codart': [codigo],
-                    'numlote': [nuevo_lote],  # Usar el lote ingresado por el usuario
-                    'cantidad': [cantidad],
-                    'cod_barras': [selected_row['cod_barras'] if 'cod_barras' in selected_row else None],
-                    'nomart': [selected_row['nomart'] if 'nomart' in selected_row else None],
-                    'presentacion': [selected_row['presentacion'] if 'presentacion' in selected_row else None],
-                    # Verificar el formato de 'fechavencelote' y convertirlo si es necesario
-                    'fechavencelote': [pd.to_datetime(selected_row['fechavencelote'], errors='coerce').strftime('%d/%m/%Y') 
-                                       if 'fechavencelote' in selected_row else None]
-                }
+                # Si se encuentra la fila seleccionada, guardar los datos
+                if selected_row is not None:
+                    # Crear un dataframe con la información ingresada y los datos del inventario
+                    consulta_data = {
+                        'codart': [codigo],
+                        'numlote': [nuevo_lote],  # Usar el lote ingresado por el usuario
+                        'cantidad': [cantidad],
+                        'cod_barras': [selected_row['cod_barras'] if 'cod_barras' in selected_row else None],
+                        'nomart': [selected_row['nomart'] if 'nomart' in selected_row else None],
+                        'presentacion': [selected_row['presentacion'] if 'presentacion' in selected_row else None],
+                        # Verificar el formato de 'fechavencelote' y convertirlo si es necesario
+                        'fechavencelote': [pd.to_datetime(selected_row['fechavencelote'], errors='coerce').strftime('%d/%m/%Y') 
+                                           if 'fechavencelote' in selected_row else None]
+                    }
 
-                consulta_df = pd.DataFrame(consulta_data)
+                    consulta_df = pd.DataFrame(consulta_data)
 
-                # Crear archivo Excel en memoria
-                consultas_excel = convertir_a_excel(consulta_df)
+                    # Crear archivo Excel en memoria
+                    consultas_excel = convertir_a_excel(consulta_df)
 
-                # Proveer opción de descarga
-                st.success("Consulta guardada con éxito!")
-                st.download_button(
-                    label="Descargar Excel con la consulta guardada",
-                    data=consultas_excel,
-                    file_name='consulta_guardada.xlsx',
-                    mime="application/vnd.ms-excel"
-                )
+                    # Proveer opción de descarga
+                    st.success("Consulta guardada con éxito!")
+                    st.download_button(
+                        label="Descargar Excel con la consulta guardada",
+                        data=consultas_excel,
+                        file_name='consulta_guardada.xlsx',
+                        mime="application/vnd.ms-excel"
+                    )
     else:
         st.error("Código de artículo no encontrado en el inventario.")
