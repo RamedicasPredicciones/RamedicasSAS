@@ -85,36 +85,33 @@ if codigo:
             if not nuevo_lote:  # Verificar si el nuevo lote está vacío
                 st.error("Debe ingresar un número de lote válido.")
             else:
-                # Verificar si el lote ingresado existe en los resultados filtrados
-                if nuevo_lote != 'Otro' and nuevo_lote not in search_results['numlote'].values:
-                    st.error(f"El lote {nuevo_lote} no está disponible para el código de artículo {codigo}.")
-                else:
-                    # Obtener las filas que coinciden con el código y el lote seleccionado
-                    selected_row = search_results[search_results['numlote'] == nuevo_lote].iloc[0] if nuevo_lote != 'Otro' else search_results.iloc[0]
+                # Obtener las filas que coinciden con el código y el lote seleccionado
+                selected_row = search_results.iloc[0]  # Siempre tomar el primer resultado
 
-                    # Crear un dataframe con la información ingresada y los datos del inventario
-                    consulta_data = {
-                        'codart': [codigo],
-                        'numlote': [nuevo_lote],
-                        'cantidad': [cantidad],
-                        'cod_barras': [selected_row['cod_barras'] if 'cod_barras' in selected_row else None],
-                        'nomart': [selected_row['nomart'] if 'nomart' in selected_row else None],
-                        'presentacion': [selected_row['presentacion'] if 'presentacion' in selected_row else None],
-                        'fechavencelote': [selected_row['fechavencelote'] if 'fechavencelote' in selected_row else None]
-                    }
+                # Crear un dataframe con la información ingresada y los datos del inventario
+                consulta_data = {
+                    'codart': [codigo],
+                    'numlote': [nuevo_lote],  # Usar el lote ingresado por el usuario
+                    'cantidad': [cantidad],
+                    'cod_barras': [selected_row['cod_barras'] if 'cod_barras' in selected_row else None],
+                    'nomart': [selected_row['nomart'] if 'nomart' in selected_row else None],
+                    'presentacion': [selected_row['presentacion'] if 'presentacion' in selected_row else None],
+                    'fechavencelote': [selected_row['fechavencelote'] if 'fechavencelote' in selected_row else None]
+                }
 
-                    consulta_df = pd.DataFrame(consulta_data)
+                consulta_df = pd.DataFrame(consulta_data)
 
-                    # Crear archivo Excel en memoria
-                    consultas_excel = convertir_a_excel(consulta_df)
+                # Crear archivo Excel en memoria
+                consultas_excel = convertir_a_excel(consulta_df)
 
-                    # Proveer opción de descarga
-                    st.success("Consulta guardada con éxito!")
-                    st.download_button(
-                        label="Descargar Excel con la consulta guardada",
-                        data=consultas_excel,
-                        file_name='consulta_guardada.xlsx',
-                        mime="application/vnd.ms-excel"
-                    )
+                # Proveer opción de descarga
+                st.success("Consulta guardada con éxito!")
+                st.download_button(
+                    label="Descargar Excel con la consulta guardada",
+                    data=consultas_excel,
+                    file_name='consulta_guardada.xlsx',
+                    mime="application/vnd.ms-excel"
+                )
     else:
         st.error("Código de artículo no encontrado en el inventario.")
+
