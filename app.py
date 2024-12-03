@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 import streamlit as st
+import io
 
 # Función para cargar y unir los datos del inventario y el maestro de moléculas
 @st.cache_data
@@ -16,7 +17,7 @@ def cargar_inventario_y_completar():
             inventario_df = pd.DataFrame(data_inventario)
             inventario_df.columns = inventario_df.columns.str.lower().str.strip()
 
-            # Renombrar la columna 'codArt' a 'codart' si no está
+            # Renombrar la columna 'codArt' a 'codart'
             if 'codart' not in inventario_df.columns and 'codart' in inventario_df.columns.str.lower():
                 inventario_df.rename(columns={'codArt': 'codart'}, inplace=True)
 
@@ -43,14 +44,13 @@ def cargar_inventario_y_completar():
         print(f"Error en la conexión con la API: {e}")
         return None
 
-# Función para guardar los datos seleccionados en un archivo Excel
-def save_to_excel(data, file_name='consultas.xlsx'):
-    try:
-        existing_data = pd.read_excel(file_name)
-        combined_data = pd.concat([existing_data, data], ignore_index=True)
-        combined_data.to_excel(file_name, index=False)
-    except FileNotFoundError:
-        data.to_excel(file_name, index=False)
+# Función para guardar los datos seleccionados en un archivo Excel en memoria
+def convertir_a_excel(df):
+    output = io.BytesIO()  # Crea un archivo en memoria
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Consultas")
+    output.seek(0)  # Mueve el puntero al inicio del archivo
+    return output.getvalue()
 
 # Configuración de la página en Streamlit
 st.title("Consulta de Artículos y Lotes")
@@ -58,55 +58,43 @@ st.title("Consulta de Artículos y Lotes")
 # Cargar el inventario y los datos completos
 inventario_df = cargar_inventario_y_completar()
 
-# Verificar si las columnas necesarias están en el inventario
-required_columns = ['codart', 'numlote', 'cantidad', 'cod_barras', 'nomart', 'presentacion', 'fechavencelote']
-missing_columns = [col for col in required_columns if col not in inventario_df.columns]
-if missing_columns:
-    st.error(f"Faltan las siguientes columnas en el inventario: {', '.join(missing_columns)}")
-else:
-    # Formulario de búsqueda del código de artículo
-    codigo = st.text_input('Ingrese el código del artículo:')
+# Formulario de búsqueda del código de artículo
+codigo = st.text_input('Ingrese el código del artículo:')
 
-    if codigo:
-        # Filtrar el inventario por código de artículo
-        search_results = inventario_df[inventario_df['codart'].str.contains(codigo, case=False, na=False)]
+if codigo:
+    # Filtrar el inventario por código de artículo
+    search_results = inventario_df[inventario_df['codart'].str.contains(codigo, case=False, na=False)]
 
-        if not search_results.empty:
-            # Mostrar los lotes disponibles para el código de artículo ingresado
-            lotes = search_results['numlote'].unique().tolist()
+    if not search_results.empty:
+        # Mostrar los lotes disponibles para el código de artículo ingresado
+        lotes = search_results['numlote'].unique()
+        lote_seleccionado = st.selectbox('Seleccione un lote', lotes)
 
-            # Añadir una opción para ingresar un nuevo lote
-            lotes.append('Otro')
-
-            lote_seleccionado = st.selectbox('Seleccione un lote', lotes)
-
-            # Si el lote seleccionado es 'Otro', permitir ingresar un nuevo número de lote
-            if lote_seleccionado == 'Otro':
-                nuevo_lote = st.text_input('Ingrese el nuevo número de lote:')
-            else:
-                nuevo_lote = lote_seleccionado
-
-            # Campo para ingresar la cantidad
-            cantidad = st.number_input('Ingrese la cantidad', min_value=1)
-
-            # Guardar la selección y datos en el archivo Excel
-            if st.button('Guardar consulta'):
-                # Filtrar los datos por el lote seleccionado
-                selected_data = search_results[search_results['numlote'] == nuevo_lote]
-                selected_data = selected_data[['codart', 'numlote', 'cantidad', 'cod_barras', 'nomart', 'presentacion', 'fechavencelote']].copy()
-                selected_data['cantidad'] = cantidad
-
-                # Guardar el archivo
-                save_to_excel(selected_data)
-                st.success("Consulta guardada con éxito!")
-
+        # Si el lote seleccionado no está en la lista, permitir escribir uno nuevo
+        if lote_seleccionado == 'Otro':
+            nuevo_lote = st.text_input('Ingrese el nuevo número de lote:')
         else:
-            st.error("Código de artículo no encontrado en el inventario.")
+            nuevo_lote = lote_seleccionado
 
-    # Opción para descargar el archivo con todas las consultas realizadas
-    st.download_button(
-        label="Descargar Excel con todas las consultas",
-        data=open('consultas.xlsx', 'rb').read(),
-        file_name='consultas.xlsx',
-        mime="application/vnd.ms-excel"
-    )
+        # Campo para ingresar la cantidad
+        cantidad = st.number_input('Ingrese la cantidad', min_value=1)
+
+        # Guardar la selección y datos en el archivo Excel
+        if st.button('Guardar consulta'):
+            selected_data = search_results[search_results['numlote'] == nuevo_lote]
+            selected_data = selected_data[['codart', 'numlote', 'cantidad', 'cod_barras', 'nomart', 'presentacion', 'fechavencelote']].copy()
+            selected_data['cantidad'] = cantidad
+
+            # Crear archivo Excel en memoria
+            consultas_excel = convertir_a_excel(selected_data)
+
+            # Proveer opción de descarga
+            st.success("Consulta guardada con éxito!")
+            st.download_button(
+                label="Descargar Excel con la consulta guardada",
+                data=consultas_excel,
+                file_name='consulta_guardada.xlsx',
+                mime="application/vnd.ms-excel"
+            )
+    else:
+        st.error("Código de artículo no encontrado en el inventario.")
