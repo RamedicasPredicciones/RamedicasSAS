@@ -4,3 +4,4 @@ openpyxl
 requests
 opencv-python-headless
 streamlit-webrtc
+pyzbar
