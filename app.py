@@ -17,7 +17,7 @@ def cargar_inventario_y_completar():
             inventario_df = pd.DataFrame(data_inventario)
             inventario_df.columns = inventario_df.columns.str.lower().str.strip()
 
-            # Renombrar la columna 'codArt' a 'codart'
+            # Renombrar la columna 'codArt' a 'codart' si es necesario
             if 'codart' not in inventario_df.columns and 'codart' in inventario_df.columns.str.lower():
                 inventario_df.rename(columns={'codArt': 'codart'}, inplace=True)
 
@@ -77,7 +77,7 @@ if codigo:
         else:
             nuevo_lote = lote_seleccionado
 
-        # Campo para ingresar la cantidad
+        # Campo para ingresar la cantidad (esto es lo que el usuario ingresa)
         cantidad = st.number_input('Ingrese la cantidad', min_value=1)
 
         # Guardar la selección y datos en el archivo Excel
@@ -88,14 +88,14 @@ if codigo:
                 selected_data = search_results[search_results['numlote'] == nuevo_lote]
                 
                 # Asegurarse de que las columnas necesarias estén presentes
-                required_columns = ['codart', 'numlote', 'cantidad', 'cod_barras', 'nomart', 'presentacion', 'fechavencelote']
+                required_columns = ['codart', 'numlote', 'cod_barras', 'nomart', 'presentacionart', 'fechavencelote']
                 missing_columns = [col for col in required_columns if col not in selected_data.columns]
                 if missing_columns:
                     st.error(f"Faltan las siguientes columnas: {', '.join(missing_columns)}")
                 else:
                     # Si las columnas están presentes, procesar los datos
                     selected_data = selected_data[required_columns].copy()
-                    selected_data['cantidad'] = cantidad
+                    selected_data['cantidad'] = cantidad  # Asignar la cantidad ingresada
 
                     # Crear archivo Excel en memoria
                     consultas_excel = convertir_a_excel(selected_data)
